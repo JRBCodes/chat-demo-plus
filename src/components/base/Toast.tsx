@@ -1,7 +1,7 @@
 import clsx from 'clsx'
 import { useTranslate } from '../../i18n/index.js'
 import { IconToastError16 } from './icons.js'
-import { useToast } from './toastState.js'
+import { hideToast, useToast } from './toastState.js'
 import styles from './Toast.module.css'
 
 export const Toast = () => {
@@ -18,6 +18,7 @@ export const Toast = () => {
     )
   }
   const error = message.type === 'error'
+  const action = message.action
   return (
     <div key={id} className={clsx(styles.toast, error && styles.error)} role="status">
       {error ? (
@@ -31,6 +32,18 @@ export const Toast = () => {
           <a className={styles.link} href={message.link.href} target="_blank" rel="noreferrer">
             {t(message.link.key)}
           </a>
+        ) : null}
+        {action ? (
+          <button
+            type="button"
+            className={styles.action}
+            onClick={() => {
+              hideToast()
+              action.onClick()
+            }}
+          >
+            {t(action.key)}
+          </button>
         ) : null}
       </span>
     </div>

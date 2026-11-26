@@ -12,7 +12,15 @@ import {
   useUploads,
 } from '../attachments.js'
 import { useSettings } from '../settings.js'
-import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
+import {
+  appendBranch,
+  getVisibleMessages,
+  normalizeSession,
+  removeMessage,
+  removeMessageAndBelow,
+  replaceReplyText,
+  selectVersion,
+} from './branches.js'
 import * as db from './db.js'
 import {
   clearAllDrafts,
@@ -122,6 +130,13 @@ let historyEpoch = 0
 let initTask: Promise<void> | undefined
 const sessionLoads = new Map<string, { promise: Promise<void> }>()
 
+/** 只保留最近一次删除的快照；会话不可变，直接持有旧引用即可完整还原。 */
+let undoRecord: { sessionId: string; previous: Session } | null = null
+/** 待回收的附件原件；清理时长于撤销提示，到点按引用计数判断是否真的删除。 */
+let cleanupFiles: string[] = []
+let cleanupTimer = 0
+const UNDO_FILE_CLEANUP_DELAY = 6000
+
 const touchSession = (id: string) => sessionAccess.set(id, ++accessSequence)
 
 const trimSessionCache = () => {
@@ -152,7 +167,9 @@ const trimSessionCache = () => {
   }
 }
 
-const updateSession = (id: string, update: (session: Session) => Session) =>
+const updateSession = (id: string, update: (session: Session) => Session) => {
+  // 任何后续改动都让删除快照失效，避免撤销覆盖新内容
+  undoRecord = null
   set((state) => {
     const previous = Object.hasOwn(state.sessionCache, id) ? state.sessionCache[id] : undefined
     if (!previous) {
@@ -173,6 +190,7 @@ const updateSession = (id: string, update: (session: Session) => Session) =>
           ),
     }
   })
+}
 
 const updateReply = (sessionId: string, reply: AssistantMessage) =>
   updateSession(sessionId, (session) => ({
@@ -221,6 +239,45 @@ const persist = (sessionId: string) => {
         }
       })
   }
+}
+
+/** 消息中提问附件的本地 id；回答不带附件 */
+const collectFileIds = (messages: Message[]): string[] => {
+  const ids = new Set<string>()
+  for (const message of messages) {
+    if (message.role === 'user') {
+      for (const file of message.files) {
+        ids.add(file.id)
+      }
+    }
+  }
+  return [...ids]
+}
+
+/**
+ * 延迟回收删除消息的附件原件。撤销恢复的会话会重新写入摘要，
+ * 引用计数大于 0 时原件保留，因此这里不需要随撤销取消。
+ */
+const scheduleFileCleanup = (ids: string[]) => {
+  if (ids.length === 0) {
+    return
+  }
+  cleanupFiles = [...new Set([...cleanupFiles, ...ids])]
+  window.clearTimeout(cleanupTimer)
+  cleanupTimer = window.setTimeout(() => {
+    const pending = cleanupFiles
+    cleanupFiles = []
+    cleanupTimer = 0
+    void db
+      .deleteUnreferencedFiles(pending)
+      .catch(db.reportStorageError('clean up deleted message files'))
+  }, UNDO_FILE_CLEANUP_DELAY)
+}
+
+/** 记录可撤销的删除；新的删除替换旧快照，旧的删除不再可撤销。 */
+const pushUndo = (sessionId: string, previous: Session, removedFiles: string[]) => {
+  undoRecord = { sessionId, previous }
+  scheduleFileCleanup(removedFiles)
 }
 
 export const retrySaveSessions = () => {
@@ -681,6 +738,24 @@ export const editMessage = (sessionId: string, messageId: string, content: strin
   return true
 }
 
+/** 就地覆盖 AI 回答正文：不新增版本，原文不可恢复；返回是否写入。 */
+export const editReply = (sessionId: string, messageId: string, text: string): boolean => {
+  if (get().importingHistory || deletingSessions.has(sessionId) || getStreamController(sessionId)) {
+    return false
+  }
+  const session = getSession(sessionId)
+  if (!session) {
+    return false
+  }
+  const next = replaceReplyText(session, messageId, text)
+  if (next === session) {
+    return false
+  }
+  updateSession(sessionId, () => ({ ...next, updatedAt: Date.now() }))
+  persist(sessionId)
+  return true
+}
+
 export const selectMessageVersion = (sessionId: string, messageId: string) => {
   if (get().importingHistory || deletingSessions.has(sessionId)) {
     return
@@ -690,6 +765,58 @@ export const selectMessageVersion = (sessionId: string, messageId: string) => {
   }
   updateSession(sessionId, (session) => selectVersion(session, messageId))
   persist(sessionId)
+}
+
+/** 删除单条消息：子消息接替它的位置；返回删除条数，0 表示未执行。 */
+export const deleteMessage = (sessionId: string, messageId: string): number => {
+  if (get().importingHistory || deletingSessions.has(sessionId) || getStreamController(sessionId)) {
+    return 0
+  }
+  const session = getSession(sessionId)
+  if (!session) {
+    return 0
+  }
+  const result = removeMessage(session, messageId)
+  if (!result) {
+    return 0
+  }
+  updateSession(sessionId, () => ({ ...result.session, updatedAt: Date.now() }))
+  pushUndo(sessionId, session, collectFileIds(result.removed))
+  persist(sessionId)
+  return result.removed.length
+}
+
+/** 删除消息及全部后代（含其他版本）；返回删除条数，0 表示未执行。 */
+export const deleteMessageAndBelow = (sessionId: string, messageId: string): number => {
+  if (get().importingHistory || deletingSessions.has(sessionId) || getStreamController(sessionId)) {
+    return 0
+  }
+  const session = getSession(sessionId)
+  if (!session) {
+    return 0
+  }
+  const result = removeMessageAndBelow(session, messageId)
+  if (!result) {
+    return 0
+  }
+  updateSession(sessionId, () => ({ ...result.session, updatedAt: Date.now() }))
+  pushUndo(sessionId, session, collectFileIds(result.removed))
+  persist(sessionId)
+  return result.removed.length
+}
+
+/** 撤销最近一次删除；会话已被删除或正在替换历史时忽略。 */
+export const undoDelete = () => {
+  const record = undoRecord
+  if (!record || get().importingHistory) {
+    return
+  }
+  undoRecord = null
+  if (!getSession(record.sessionId)) {
+    return
+  }
+  updateSession(record.sessionId, () => record.previous)
+  persist(record.sessionId)
 }
 
 /** 继续最后一条未完成的回答：保留原消息与开关，仅将新流的内容追加到原块之后。 */

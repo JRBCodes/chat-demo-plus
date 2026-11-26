@@ -147,6 +147,30 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
   ])
 }
 
+/** 消息删除后清理原件：仍被其他会话（或撤销恢复的会话）引用时保留。 */
+export const deleteUnreferencedFiles = async (ids: string[]): Promise<void> => {
+  if (ids.length === 0) {
+    return
+  }
+  const tx = (await getDB()).transaction(['files', 'sessionSummaries'], 'readwrite')
+  await Promise.all([
+    (async () => {
+      try {
+        const summaries = tx.objectStore('sessionSummaries')
+        for (const id of ids) {
+          if ((await summaries.index('fileIds').count(id)) === 0) {
+            await tx.objectStore('files').delete(id)
+          }
+        }
+      } catch (error) {
+        abortTransaction(tx)
+        throw error
+      }
+    })(),
+    tx.done,
+  ])
+}
+
 const putFiles = async (store: 'files' | 'filesStaging', files: StoredFile[]) => {
   if (!files.length) {
     return

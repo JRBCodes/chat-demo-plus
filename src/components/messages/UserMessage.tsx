@@ -2,13 +2,22 @@ import { useTranslate } from '../../i18n/index.js'
 import clsx from 'clsx'
 import { memo, useLayoutEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../app/viewport.js'
-import { IconEditOutline16 } from '../base/icons.js'
+import { IconEditOutline16, IconEllipsisOutline16, IconTrashOutline16 } from '../base/icons.js'
 import { getFileViewType, isImage } from '../../services/attachments.js'
-import { editMessage, retryUpload } from '../../services/chat/store.js'
+import {
+  deleteMessage,
+  deleteMessageAndBelow,
+  editMessage,
+  retryUpload,
+  undoDelete,
+} from '../../services/chat/store.js'
 import { stopReadAloud } from '../../services/speech/readAloud.js'
 import type { UserMessage as UserMessageType } from '../../services/chat/types.js'
+import { closeSearchPanel } from '../search/searchPanelState.js'
+import { showToast } from '../base/toastState.js'
 import { Button } from '../base/Button.js'
 import { IconButton } from '../base/IconButton.js'
+import { Menu } from '../base/Menu.js'
 import { ensureApiKey } from '../settings/settingsDialogState.js'
 import {
   BranchSwitcher,
@@ -59,6 +68,22 @@ export const UserMessage = memo(function UserMessage({
       stopReadAloud()
       setEditing(false)
     }
+  }
+
+  const remove = (andBelow: boolean) => {
+    stopReadAloud()
+    closeSearchPanel()
+    const removed = andBelow
+      ? deleteMessageAndBelow(sessionId, message.id)
+      : deleteMessage(sessionId, message.id)
+    if (removed === 0) {
+      return
+    }
+    showToast({
+      key: removed === 1 ? 'messageDeleted' : 'messagesDeleted',
+      params: { count: removed },
+      action: { key: 'undo', onClick: undoDelete },
+    })
   }
 
   return (
@@ -128,6 +153,34 @@ export const UserMessage = memo(function UserMessage({
                   setEditing(true)
                 }}
               />
+              <Menu
+                options={[
+                  {
+                    key: 'delete',
+                    label: t('deleteMessage'),
+                    icon: <IconTrashOutline16 />,
+                    danger: true,
+                    onSelect: () => remove(false),
+                  },
+                  {
+                    key: 'deleteBelow',
+                    label: t('deleteMessageAndBelow'),
+                    icon: <IconTrashOutline16 />,
+                    danger: true,
+                    onSelect: () => remove(true),
+                  },
+                ]}
+              >
+                {({ toggle }) => (
+                  <IconButton
+                    icon={<IconEllipsisOutline16 />}
+                    tooltip={t('more')}
+                    tooltipPlacement="bottom"
+                    disabled={busy}
+                    onClick={toggle}
+                  />
+                )}
+              </Menu>
             </div>
             <BranchSwitcher versions={versions} disabled={busy} onSelect={onSelectVersion} />
           </div>
