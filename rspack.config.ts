@@ -4,7 +4,19 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from '@rspack/cli'
 import { rspack, type Configuration } from '@rspack/core'
 
-const dev = process.env.NODE_ENV !== 'production'
+/**
+ * 构建模式：脚本里不再依赖 `NODE_ENV=production` 前缀（Windows 的 cmd / PowerShell 不支持），
+ * 显式设置了 NODE_ENV 时以它为准，否则按 rspack 子命令判断，serve 视为开发。
+ */
+const inferMode = (): 'development' | 'production' => {
+  const { NODE_ENV } = process.env
+  if (NODE_ENV === 'production' || NODE_ENV === 'development') {
+    return NODE_ENV
+  }
+  return process.argv.includes('build') ? 'production' : 'development'
+}
+
+const dev = inferMode() === 'development'
 const targets = ['chrome >= 105', 'edge >= 105', 'safari >= 16', 'firefox >= 110']
 const root = path.dirname(fileURLToPath(import.meta.url))
 const { version } = JSON.parse(
