@@ -21,7 +21,9 @@
       background-color: var(--dsw-specific-sidebar-nav-item-hover);
     }
 
+    /* focus-within：菜单打开后指针移到浮层上，行不再悬停，按钮仍需留位 */
     &:hover,
+    &:focus-within,
     &.active {
       .action {
         display: flex;
