@@ -518,6 +518,46 @@ export const selectSession = (id: string) => {
   }
 }
 
+/**
+ * 复制会话：换新的会话 id 与标题，消息对象与附件原件共用（原件按 id 引用，引用计数保证不会被误删）。
+ * 生成后直接打开副本；正在生成或正在替换历史时不复制，避免留下写了一半的回答。
+ */
+export const duplicateSession = async (
+  sessionId: string,
+  title: string
+): Promise<string | null> => {
+  if (get().importingHistory || deletingSessions.has(sessionId) || getStreamController(sessionId)) {
+    return null
+  }
+  if (!get().sessions.some((session) => session.id === sessionId)) {
+    return null
+  }
+  const stored = getSession(sessionId) ?? (await db.loadSession(sessionId))
+  // 读取期间可能开始替换历史或删除该会话，此时副本会指向已经不存在的数据
+  if (!stored || get().importingHistory || deletingSessions.has(sessionId)) {
+    return null
+  }
+  const source = normalizeSession(stored)
+  const now = Date.now()
+  const copy: Session = {
+    ...source,
+    id: createId(),
+    title,
+    createdAt: now,
+    updatedAt: now,
+    messages: [...source.messages],
+  }
+  touchSession(copy.id)
+  set((state) => ({
+    sessions: sortSessions([toSessionSummary(copy), ...state.sessions]),
+    sessionCache: { ...state.sessionCache, [copy.id]: copy },
+    activeId: copy.id,
+  }))
+  persist(copy.id)
+  trimSessionCache()
+  return copy.id
+}
+
 export const renameSession = (id: string, title: string) => {
   if (get().importingHistory || deletingSessions.has(id)) {
     return

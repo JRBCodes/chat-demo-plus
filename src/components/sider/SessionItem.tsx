@@ -1,11 +1,17 @@
 import clsx from 'clsx'
 import { memo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
-import { IconEditOutline16, IconEllipsisOutline16, IconTrashOutline16 } from '../base/icons.js'
-import { renameSession, selectSession } from '../../services/chat/store.js'
+import {
+  IconCopyOutline16,
+  IconEditOutline16,
+  IconEllipsisOutline16,
+  IconTrashOutline16,
+} from '../base/icons.js'
+import { duplicateSession, renameSession, selectSession } from '../../services/chat/store.js'
 import type { SessionSummary } from '../../services/chat/types.js'
 import { IconButton } from '../base/IconButton.js'
 import { Menu } from '../base/Menu.js'
+import { showToast } from '../base/toastState.js'
 import { closeMobileSider } from './mobileSiderState.js'
 import styles from './SessionItem.module.css'
 
@@ -21,6 +27,14 @@ export const SessionItem = memo(function SessionItem({
   const t = useTranslate()
   const [editing, setEditing] = useState(false)
   const displayTitle = session.title || t('untitledChat')
+
+  const duplicate = () => {
+    void duplicateSession(session.id, t('sessionCopyTitle', { title: displayTitle })).then((id) => {
+      if (id) {
+        showToast({ key: 'sessionDuplicated' })
+      }
+    })
+  }
 
   if (editing) {
     const finish = (title: string) => {
@@ -64,6 +78,12 @@ export const SessionItem = memo(function SessionItem({
               label: t('sessionItemMenuRenameOption'),
               icon: <IconEditOutline16 />,
               onSelect: () => setEditing(true),
+            },
+            {
+              key: 'duplicate',
+              label: t('sessionItemMenuDuplicateOption'),
+              icon: <IconCopyOutline16 />,
+              onSelect: duplicate,
             },
             {
               key: 'delete',
