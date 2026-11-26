@@ -1,6 +1,6 @@
 # chat-demo
 
-English | [简体中文][過時](README.zh-CN.md)
+English | [简体中文](README.zh-CN.md) [過時]
 
 A static chat demo powered by the DeepSeek API. No application backend is required: the browser connects directly to the configured API service.
 
