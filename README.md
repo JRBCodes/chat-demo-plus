@@ -1,10 +1,10 @@
 # chat-demo
 
-English | [简体中文](README.zh-CN.md)
+English | [简体中文][過時](README.zh-CN.md)
 
 A static chat demo powered by the DeepSeek API. No application backend is required: the browser connects directly to the configured API service.
 
-You can [try the app online](https://deepseek-ai.github.io/chat-demo/) or download the archive from [Releases](https://github.com/deepseek-ai/deepseek-chat-demo/releases), extract it, and double-click `index.html` to use it locally without installation or a build. Enter your API key in Settings before your first chat.
+You can [try the app online](https://jrbcodes.github.io/chat-demo-plus/) or download the archive from [Releases](https://github.com/JRBCodes/chat-demo-plus/releases), extract it, and double-click `index.html` to use it locally without installation or a build. Enter your API key in Settings before your first chat.
 
 ## Getting started
 
@@ -27,7 +27,7 @@ pnpm build
 
 The output is written to `dist/`. Deploy it to a static web server or open `dist/index.html` directly. Opening the file directly requires browser support for storage on `file://` pages and an API service that permits their cross-origin requests.
 
-## Features
+## Features [WIP]
 
 - Multiple conversations with automatic titles, renaming, and deletion; edit prompts, regenerate replies, and switch between message branches.
 - Streaming replies, deep thinking, smart search, link reading, and source citations; stop generation or continue eligible replies.
