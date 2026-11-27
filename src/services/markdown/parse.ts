@@ -26,18 +26,18 @@ declare module 'mdast' {
 
 const text = (value: string): Text => ({ type: 'text', value })
 
-/**
- * 解析正文，并把渲染器不单独处理的节点提前换掉，渲染时无需再读原文：
- * - 传入 sources 时，[citation:N] 换成角标节点，找不到来源的直接去掉
- * - disableLink 时链接只保留文字
- * - 删除线保留原样的 ~ 定界符，脚注、引用式链接与定义显示原文
- */
-export function toMdAst(
-  input: string,
-  { sources, disableLink }: { sources: Source[] | undefined; disableLink: boolean }
+/** 整段按普通文本显示：依赖的解析器抛错时的兜底，避免整条消息渲染失败 */
+const plainTextRoot = (input: string): Root => ({
+  type: 'root',
+  children: [{ type: 'paragraph', children: [text(input)] }],
+})
+
+/** 解析正文，并把渲染器不单独处理的节点提前换掉，渲染时无需再读原文 */
+function parseMarkdown(
+  normalized: string,
+  sources: Source[] | undefined,
+  disableLink: boolean
 ): Root {
-  // \[ … \] 先归一化成 $$ … $$，其余偏移都按归一化后的文本计算
-  const normalized = normalizeTexBlocks(input)
   const ast = fromMarkdown(normalized, {
     extensions: [
       // codeIndented 语法导致有前导空格的列表无法正常渲染
@@ -88,4 +88,24 @@ export function toMdAst(
   }
   simplify(ast)
   return ast
+}
+
+/**
+ * 解析正文，并把渲染器不单独处理的节点提前换掉，渲染时无需再读原文：
+ * - 传入 sources 时，[citation:N] 换成角标节点，找不到来源的直接去掉
+ * - disableLink 时链接只保留文字
+ * - 删除线保留原样的 ~ 定界符，脚注、引用式链接与定义显示原文
+ */
+export function toMdAst(
+  input: string,
+  { sources, disableLink }: { sources: Source[] | undefined; disableLink: boolean }
+): Root {
+  try {
+    // \[ … \] 先归一化成 $$ … $$，其余偏移都按归一化后的文本计算
+    return parseMarkdown(normalizeTexBlocks(input), sources, disableLink)
+  } catch {
+    // llm-math 在未闭合的数学围栏上会断言失败并抛错（见 tex.ts 说明）；
+    // 依赖内部抛错不该影响整条消息，降级为纯文本。
+    return plainTextRoot(input)
+  }
 }
