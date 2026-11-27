@@ -114,12 +114,30 @@ works when `index.html` is opened from `file://`.
   return explicitly where required, and avoid `any` — prefer precise unions (see
   `services/chat/types.ts`).
 - Match the surrounding formatting (2 spaces, single quotes, no semicolons) and prefer named
-  exports; keep comments short and in the file's existing language (Chinese in most source files).
+  exports. Comment policy: see [Comments](#comments).
 - Avoid new dependencies unless the current stack genuinely cannot do the job; if you must add
   one, prefer a small, tree-shakeable package and verify `pnpm build` still produces a working
   `dist/` (including `file://` usage).
 - Verify changes with `pnpm type`, `pnpm lint`, and `pnpm format`; run `pnpm build` for changes
   touching build config, dependencies, or the static-output assumptions above.
+
+### Comments
+
+Default to none. Names, types and structure carry the meaning; a comment is the last resort for
+something the code cannot say.
+
+- Comment only for: a non-obvious *why*, a hidden constraint, a workaround for a dependency bug
+  (name the dependency and how it fails), or a contract not visible in the signature
+  (e.g. "returns `0` when not applied").
+- Never narrate *what* the code does, restate names, add section banners or decorative CSS
+  headers, keep commented-out code, or leave `TODO` placeholders.
+- One line is the target. JSDoc only on exported APIs, at most two lines. Write in the file's
+  existing language (Chinese in `src/`, English here and in docs).
+- Explain the reason, not the mechanics: "llm-math asserts on an unclosed fence" beats
+  "replace the delimiters".
+- When editing existing code, leave untouched lines alone — no drive-by commentary.
+- Reference for tone and density: `src/services/markdown/tex.ts` and the undo guards in
+  `src/services/chat/store.ts`.
 
 ## Project layout
 
