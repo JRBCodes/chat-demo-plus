@@ -71,7 +71,6 @@ export const AssistantMessage = memo(function AssistantMessage({
   const copyText = responseText || notice?.text
   const waiting = streaming && view.steps.length === 0 && !view.answer && !message.thinking
   const summaryEntry = `${message.id}-summary`
-  // 可编辑的是本轮全部模型正文（含工具调用前的说明），模板提示与拒绝的回答不能改写。
   const hasTemplate = message.blocks.some((block) => block.type === 'text' && block.isTemplate)
   const editableText = message.blocks
     .map((block) => (block.type === 'text' && !block.isTemplate ? block.text : ''))

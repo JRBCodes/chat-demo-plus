@@ -100,7 +100,6 @@
   transition: opacity var(--ds-transition-duration) var(--ds-ease-in-out);
 }
 
-/* 就地编辑回答：与用户消息编辑器同一套视觉，块级占满整行 */
 .editor {
   width: 100%;
   box-sizing: border-box;

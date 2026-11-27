@@ -130,9 +130,7 @@ let historyEpoch = 0
 let initTask: Promise<void> | undefined
 const sessionLoads = new Map<string, { promise: Promise<void> }>()
 
-/** 只保留最近一次删除的快照；会话不可变，直接持有旧引用即可完整还原。 */
 let undoRecord: { sessionId: string; previous: Session } | null = null
-/** 待回收的附件原件；清理时长于撤销提示，到点按引用计数判断是否真的删除。 */
 let cleanupFiles: string[] = []
 let cleanupTimer = 0
 const UNDO_FILE_CLEANUP_DELAY = 6000
@@ -168,7 +166,7 @@ const trimSessionCache = () => {
 }
 
 const updateSession = (id: string, update: (session: Session) => Session) => {
-  // 任何后续改动都让删除快照失效，避免撤销覆盖新内容
+  // 后续改动让删除快照失效，撤销不会覆盖新内容
   undoRecord = null
   set((state) => {
     const previous = Object.hasOwn(state.sessionCache, id) ? state.sessionCache[id] : undefined
@@ -241,7 +239,6 @@ const persist = (sessionId: string) => {
   }
 }
 
-/** 消息中提问附件的本地 id；回答不带附件 */
 const collectFileIds = (messages: Message[]): string[] => {
   const ids = new Set<string>()
   for (const message of messages) {
@@ -254,10 +251,7 @@ const collectFileIds = (messages: Message[]): string[] => {
   return [...ids]
 }
 
-/**
- * 延迟回收删除消息的附件原件。撤销恢复的会话会重新写入摘要，
- * 引用计数大于 0 时原件保留，因此这里不需要随撤销取消。
- */
+/** 延迟回收原件：撤销恢复的会话会重新引用它们。 */
 const scheduleFileCleanup = (ids: string[]) => {
   if (ids.length === 0) {
     return
@@ -274,7 +268,6 @@ const scheduleFileCleanup = (ids: string[]) => {
   }, UNDO_FILE_CLEANUP_DELAY)
 }
 
-/** 记录可撤销的删除；新的删除替换旧快照，旧的删除不再可撤销。 */
 const pushUndo = (sessionId: string, previous: Session, removedFiles: string[]) => {
   undoRecord = { sessionId, previous }
   scheduleFileCleanup(removedFiles)
@@ -518,10 +511,7 @@ export const selectSession = (id: string) => {
   }
 }
 
-/**
- * 复制会话：换新的会话 id 与标题，消息对象与附件原件共用（原件按 id 引用，引用计数保证不会被误删）。
- * 生成后直接打开副本；正在生成或正在替换历史时不复制，避免留下写了一半的回答。
- */
+/** 复制会话：共享消息对象与附件原件，生成后打开副本。 */
 export const duplicateSession = async (
   sessionId: string,
   title: string
@@ -533,7 +523,7 @@ export const duplicateSession = async (
     return null
   }
   const stored = getSession(sessionId) ?? (await db.loadSession(sessionId))
-  // 读取期间可能开始替换历史或删除该会话，此时副本会指向已经不存在的数据
+  // 读取期间可能开始替换或删除，需重新检查
   if (!stored || get().importingHistory || deletingSessions.has(sessionId)) {
     return null
   }
@@ -778,7 +768,7 @@ export const editMessage = (sessionId: string, messageId: string, content: strin
   return true
 }
 
-/** 就地覆盖 AI 回答正文：不新增版本，原文不可恢复；返回是否写入。 */
+/** 就地覆盖回答正文（不新增版本）；返回是否写入。 */
 export const editReply = (sessionId: string, messageId: string, text: string): boolean => {
   if (get().importingHistory || deletingSessions.has(sessionId) || getStreamController(sessionId)) {
     return false
@@ -845,7 +835,6 @@ export const deleteMessageAndBelow = (sessionId: string, messageId: string): num
   return result.removed.length
 }
 
-/** 撤销最近一次删除；会话已被删除或正在替换历史时忽略。 */
 export const undoDelete = () => {
   const record = undoRecord
   if (!record || get().importingHistory) {

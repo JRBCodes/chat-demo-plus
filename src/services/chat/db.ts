@@ -147,7 +147,6 @@ export const deleteSession = async (sessionId: string): Promise<void> => {
   ])
 }
 
-/** 消息删除后清理原件：仍被其他会话（或撤销恢复的会话）引用时保留。 */
 export const deleteUnreferencedFiles = async (ids: string[]): Promise<void> => {
   if (ids.length === 0) {
     return

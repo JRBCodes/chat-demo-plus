@@ -26,13 +26,11 @@ declare module 'mdast' {
 
 const text = (value: string): Text => ({ type: 'text', value })
 
-/** 整段按普通文本显示：依赖的解析器抛错时的兜底，避免整条消息渲染失败 */
 const plainTextRoot = (input: string): Root => ({
   type: 'root',
   children: [{ type: 'paragraph', children: [text(input)] }],
 })
 
-/** 解析正文，并把渲染器不单独处理的节点提前换掉，渲染时无需再读原文 */
 function parseMarkdown(
   normalized: string,
   sources: Source[] | undefined,
@@ -101,11 +99,9 @@ export function toMdAst(
   { sources, disableLink }: { sources: Source[] | undefined; disableLink: boolean }
 ): Root {
   try {
-    // \[ … \] 先归一化成 $$ … $$，其余偏移都按归一化后的文本计算
     return parseMarkdown(normalizeTexBlocks(input), sources, disableLink)
   } catch {
-    // llm-math 在未闭合的数学围栏上会断言失败并抛错（见 tex.ts 说明）；
-    // 依赖内部抛错不该影响整条消息，降级为纯文本。
+    // 依赖的解析器可能抛错（见 tex.ts），降级为纯文本
     return plainTextRoot(input)
   }
 }

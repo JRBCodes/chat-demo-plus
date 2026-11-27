@@ -116,10 +116,8 @@ export const selectVersion = (original: Session, messageId: string): Session => 
   }
 }
 
-/** 删除消息的结果：新会话与被删除的消息（用于撤销和清理原件） */
 export type RemoveResult = { session: Session; removed: Message[] }
 
-/** 消息及其全部后代（含未选中的其他版本）的 id */
 export const getSubtreeIds = (session: Session, messageId: string): Set<string> => {
   const ids = new Set<string>([messageId])
   const queue = [messageId]
@@ -135,7 +133,6 @@ export const getSubtreeIds = (session: Session, messageId: string): Set<string> 
   return ids
 }
 
-/** 删除单条消息：直接子消息接替它的位置，后续对话与各版本自己的选择保持不变。 */
 export const removeMessage = (original: Session, messageId: string): RemoveResult | null => {
   const session = normalizeSession(original)
   const message = session.messages.find((item) => item.id === messageId)
@@ -144,7 +141,6 @@ export const removeMessage = (original: Session, messageId: string): RemoveResul
   }
   const parentId = message.parentId ?? null
   const children = session.messages.filter((item) => item.parentId === messageId)
-  /** 顶替它的下一条：优先沿用原有选择，其次取第一个子消息 */
   const nextId = message.selectedChildId ?? children[0]?.id
   return {
     session: {
@@ -167,7 +163,6 @@ export const removeMessage = (original: Session, messageId: string): RemoveResul
   }
 }
 
-/** 删除消息及其全部后代（含其他版本）；父节点改选同组最近的剩余消息，版本仍可切换。 */
 export const removeMessageAndBelow = (
   original: Session,
   messageId: string
@@ -182,7 +177,7 @@ export const removeMessageAndBelow = (
   const siblings = session.messages.filter((item) => item.parentId === parentId)
   const index = siblings.findIndex((item) => item.id === messageId)
   const candidates = siblings.filter((item) => !removedIds.has(item.id))
-  // 优先选删除位置之后的第一个版本，没有则退回前一个，避免同组版本无法再切换
+  // 改选同组最近的剩余版本，否则剩下的版本无法再切换
   const nextId =
     candidates.find((item) => siblings.indexOf(item) > index)?.id ?? candidates.at(-1)?.id
   return {
@@ -203,7 +198,7 @@ export const removeMessageAndBelow = (
   }
 }
 
-/** 覆盖回答正文：保留思考与工具块，正文合并为一个文本块追加在末尾；拒绝与模板提示不可编辑。 */
+/** 正文合并成一个文本块追加在末尾，保留思考与工具块。 */
 export const replaceReplyText = (
   original: Session,
   messageId: string,
